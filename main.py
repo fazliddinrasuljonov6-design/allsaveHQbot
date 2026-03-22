@@ -1,37 +1,49 @@
-import os
 import telebot
 import yt_dlp
-from flask import Flask # Buni qo'shdik
+import os
 
-# Render uchun kichik veb-server (Port xatosini yo'qotish uchun)
-app = Flask(__name__)
+# DIQQAT: Tokeningizni quyidagi qo'shtirnoq ichiga yozing
+TOKEN = '8403066362:AAFJSYJLWVa_OpRbcUlK7v2J4U6LveTGlN4' 
 
-@app.route('/')
-def index():
-    return "Bot is running!"
-
-# Bot qismi
-TOKEN = os.getenv('BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "Salom! Men tayyorman. Link yuboring!")
+    bot.reply_to(message, "Salom! @AllSaveHQbot tayyor. 📥\nVideo linkini yuboring (Instagram, YouTube, TikTok)!")
 
 @bot.message_handler(func=lambda m: True)
-def download(message):
+def download_video(message):
     url = message.text
     if "http" in url:
-        # Avvalgi yuklash kodingiz shu yerda qoladi...
-        bot.reply_to(message, "Yuklash boshlandi...")
-        # ... (yuklash kodi)
+        msg = bot.reply_to(message, "Yuklanmoqda... ⏳ (Sifat tekshirilmoqda)")
+        
+        # Fayl nomi foydalanuvchi IDsi bilan (bir vaqtda bir necha kishi ishlatsa xato bermasligi uchun)
+        file_name = f"video_{message.chat.id}.mp4"
+        
+        ydl_opts = {
+            'format': 'best', # Eng yaxshi sifatni tanlaydi
+            'outtmpl': file_name,
+            'noplaylist': True,
+        }
 
-# Botni va Veb-serverni parallel ishga tushirish
-if __name__ == "__main__":
-    # Botni alohida "threading" bilan ishga tushirish qiyin bo'lsa, 
-    # shunchaki pollingni ishga tushiramiz
-    import threading
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=os.environ.get('PORT', 8080))).start()
-    
-    print("Bot ishga tushdi...")
-    bot.polling(none_stop=True)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            # Videoni yuborish
+            with open(file_name, 'rb') as video:
+                bot.send_video(message.chat.id, video, caption="✅ @AllSaveHQbot orqali yuklab olindi!")
+            
+            # Server xotirasini tozalash (faylni o'chirish)
+            os.remove(file_name)
+            bot.delete_message(message.chat.id, msg.message_id)
+            
+        except Exception as e:
+            bot.reply_to(message, f"Xatolik yuz berdi: Link noto'g'ri yoki video juda katta.")
+            if os.path.exists(file_name):
+                os.remove(file_name)
+    else:
+        bot.reply_to(message, "Iltimos, haqiqiy video linkini yuboring.")
+
+print("Bot ishga tushdi...")
+bot.polling(none_stop=True)
